@@ -1,11 +1,12 @@
 import { Server, type Socket } from 'socket.io';
 import type { ViteDevServer } from 'vite';
-import { PrismaClient, type User } from '@prisma/client';
+import { PrismaClient, type Game, type User } from '@prisma/client';
 import * as jose from 'jose';
 import { Chess } from 'chess.js';
 
 const prisma = new PrismaClient();
 const PRIVATE_SECRET_KEY = 'f649a308d86966f34ff262a40258d6a77a62d0fcae100e82d6c9e20c1b2d7498';
+const MS_TO_AUTOLOSE = 60000;
 
 const getTokenFromCookies = (cookiesString: string) => {
 	const parsed = Object.fromEntries(cookiesString.split(';').map((c) => c.split('=')));
@@ -65,6 +66,14 @@ const handleReject = async (from: User, inviteId: number) => {
 	if (recipient) recipient.socket.emit('reject', { from });
 };
 
+let timeOuts: { game: Game; timeOutId: ReturnType<typeof setTimeout> }[] = [];
+const findTimeout = (gameId: number) => timeOuts.find((t) => t.game.id === gameId);
+const deleteTimeout = (gameId: number) => {
+	const t = findTimeout(gameId);
+	clearTimeout(t?.timeOutId);
+	timeOuts = timeOuts.filter((t) => t.game.id !== gameId);
+};
+
 const handleConfirm = async (socket: Socket, from: User, inviteId: number) => {
 	const invite = await prisma.invite.findUnique({ where: { id: inviteId } });
 	if (!invite || invite.toId !== from.id) return;
@@ -83,24 +92,34 @@ const handleConfirm = async (socket: Socket, from: User, inviteId: number) => {
 	});
 	await prisma.user.update({ where: { id: invite.fromId }, data: { gameId: game.id } });
 	await prisma.user.update({ where: { id: invite.toId }, data: { gameId: game.id } });
+	const updated = await prisma.user.findUnique({ where: { id: invite.fromId } });
+	if (!updated) return;
+	timeOuts.push({
+		game,
+		timeOutId: setTimeout(() => handleSurrender(updated), MS_TO_AUTOLOSE)
+	});
 	socket.emit('confirmation', { from });
 	if (recipient) recipient.socket.emit('confirmation', { from });
+};
+
+const endGame = async (game: Game, winnerId: number, loserId: number) => {
+	deleteTimeout(game.id);
+	await prisma.game.update({
+		where: { id: game.id },
+		data: { loserId, winnerId, endedAt: new Date() }
+	});
+	await prisma.user.update({ where: { id: game.blackPlayerId }, data: { gameId: null } });
+	await prisma.user.update({ where: { id: game.whitePlayerId }, data: { gameId: null } });
 };
 
 const handleSurrender = async (from: User) => {
 	const game = await prisma.game.findUnique({ where: { id: from.gameId || -1 } });
 	if (!game) return;
-	const blackClient = findClient(game.blackPlayerId);
-	const whiteClient = findClient(game.whitePlayerId);
 	const winnerId = game.blackPlayerId !== from.id ? game.blackPlayerId : game.whitePlayerId;
-	await prisma.game.update({
-		where: { id: game.id },
-		data: { loserId: from.id, winnerId, endedAt: new Date() }
-	});
-	await prisma.user.update({ where: { id: game.blackPlayerId }, data: { gameId: null } });
-	await prisma.user.update({ where: { id: game.whitePlayerId }, data: { gameId: null } });
-	blackClient?.socket?.emit('surrender');
-	whiteClient?.socket?.emit('surrender');
+	const loserId = game.blackPlayerId === winnerId ? game.whitePlayerId : game.blackPlayerId;
+	await endGame(game, winnerId, loserId);
+	const winnerClient = findClient(winnerId);
+	winnerClient?.socket?.emit('surrender');
 };
 
 export const webSocketServer = {
@@ -121,9 +140,20 @@ export const webSocketServer = {
 			socket.on('move', async (move) => {
 				const game = await prisma.game.findUnique({ where: { id: user.gameId || -1 } });
 				if (!game) return;
+				deleteTimeout(game.id);
 				const chess = new Chess(game.FEN);
+				if (chess.isCheckmate()) {
+					const turn = chess.turn();
+					const loserId = turn === 'w' ? game.whitePlayerId : game.blackPlayerId;
+					const winnerId = loserId === game.whitePlayerId ? game.blackPlayerId : game.whitePlayerId;
+					endGame(game, winnerId, loserId);
+					const winnerPlayer = findClient(winnerId);
+					const loserPlayer = findClient(loserId);
+					winnerPlayer?.socket?.emit('win');
+					loserPlayer?.socket?.emit('lose');
+					return;
+				}
 				try {
-					console.log(move);
 					chess.move(move);
 					const fen = chess.fen();
 					await prisma.game.update({ where: { id: game.id }, data: { FEN: fen } });
@@ -131,6 +161,16 @@ export const webSocketServer = {
 					const whitePlayer = findClient(game.whitePlayerId);
 					blackPlayer?.socket?.emit('move', fen);
 					whitePlayer?.socket?.emit('move', fen);
+					const blackUser = await prisma.user.findUnique({ where: { id: game.blackPlayerId } });
+					const whiteUser = await prisma.user.findUnique({ where: { id: game.whitePlayerId } });
+					if (!blackUser || !whiteUser) return;
+					timeOuts.push({
+						game,
+						timeOutId: setTimeout(
+							() => handleSurrender(chess.turn() === 'w' ? whiteUser : blackUser),
+							MS_TO_AUTOLOSE
+						)
+					});
 				} catch {
 					socket.emit('moveReject');
 				}

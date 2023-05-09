@@ -46,7 +46,7 @@
 </script>
 
 <span class="chip" class:variant-filled-success={myMove} class:variant-filled-warning={!myMove}
-	>{myMove ? 'Ваш ход' : 'Ожидание хода соперника...'}</span
+	>{myMove ? 'Ваш ход, у вас есть минута.' : 'Ожидание хода соперника...'}</span
 >
 <div class="flex flex-col rounded-xl overflow-hidden" class:flex-col-reverse={player === 'b'}>
 	{#each board as row, columnIndex}

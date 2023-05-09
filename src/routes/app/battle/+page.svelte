@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { socket } from '$lib/clientSocket';
+	import { goto } from '$app/navigation';
+	import { reloadSocket, socket } from '$lib/clientSocket';
 	import ChessBoard from '$lib/components/ChessBoard.svelte';
 	import { Chess } from 'chess.js';
 
@@ -12,6 +13,8 @@
 
 	const surrender = () => {
 		socket.emit('surrender');
+		reloadSocket();
+		goto('/app/profile/');
 	};
 </script>
 

@@ -7,7 +7,7 @@
 	import { fade } from 'svelte/transition';
 	import { reloadSocket, socket } from '$lib/clientSocket';
 	import GameRequestModal from '$lib/components/GameRequestModal.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 
 	export let data;
 
@@ -28,19 +28,20 @@
 		});
 	};
 
-	const handleConfirm = (data: any) => {
+	const handleConfirm = async (data: any) => {
 		modalStore.trigger({
 			type: 'alert',
 			title: `Ваше приглашение к ${data.from.name} было принято, перейдите к игре!`
 		});
 		reloadSocket();
 		goto('/app/battle/');
+		if ($page.url.pathname === '/app/battle') await invalidateAll();
 	};
 
 	const handleSurrender = () => {
 		modalStore.trigger({
 			type: 'alert',
-			title: `Игра завершилась!`
+			title: `Соперник сдался!`
 		});
 		reloadSocket();
 		goto('/app/profile');
@@ -50,6 +51,22 @@
 	socket.on('reject', handleReject);
 	socket.on('confirmation', handleConfirm);
 	socket.on('surrender', handleSurrender);
+	socket.on('win', () => {
+		modalStore.trigger({
+			type: 'alert',
+			title: `Вы выиграли!`
+		});
+		reloadSocket();
+		goto('/app/profile');
+	});
+	socket.on('lose', () => {
+		modalStore.trigger({
+			type: 'alert',
+			title: `Вы проиграли!`
+		});
+		reloadSocket();
+		goto('/app/profile');
+	});
 </script>
 
 <AppShell>
