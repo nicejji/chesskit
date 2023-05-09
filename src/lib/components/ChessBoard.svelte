@@ -8,6 +8,7 @@
 
 	const dispatch = createEventDispatcher();
 
+	$: myMove = chess.turn() === player;
 	$: board = chess.board();
 	$: backgrounds = board.map((row, columnIndex) =>
 		row.map((_, rowIndex) => getCellBg(columnIndex, rowIndex))
@@ -41,6 +42,9 @@
 	};
 </script>
 
+<span class="chip" class:variant-filled-success={myMove} class:variant-filled-warning={!myMove}
+	>{myMove ? 'Ваш ход' : 'Ожидание хода соперника...'}</span
+>
 <div class="flex flex-col rounded-xl overflow-hidden" class:flex-col-reverse={player === 'b'}>
 	{#each board as row, columnIndex}
 		<div class="flex">

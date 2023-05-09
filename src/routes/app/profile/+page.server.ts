@@ -23,7 +23,11 @@ export let load: PageServerLoad = async ({ locals }) => {
 			}
 		}
 	});
+  const games = await prisma.game.findMany({where: {
+    OR: [{winnerId: locals.user.id}, {loserId: locals.user.id}]
+  }, orderBy: {endedAt: 'desc'}, include: {winner: true, loser: true}})
 	return {
+    games,
 		currentGame: user?.currentGame,
 		recievedInvites: user?.recievedInvites,
 		sentInvites: user?.sentInvites

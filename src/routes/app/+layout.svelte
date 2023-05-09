@@ -5,7 +5,7 @@
 	import LogoutModal from '$lib/components/LogoutModal.svelte';
 	import { derived } from 'svelte/store';
 	import { fade } from 'svelte/transition';
-	import { socket } from '$lib/clientSocket';
+	import { reloadSocket, socket } from '$lib/clientSocket';
 	import GameRequestModal from '$lib/components/GameRequestModal.svelte';
 	import { goto } from '$app/navigation';
 
@@ -33,12 +33,23 @@
 			type: 'alert',
 			title: `Ваше приглашение к ${data.from.name} было принято, перейдите к игре!`
 		});
+		reloadSocket();
 		goto('/app/battle/');
+	};
+
+	const handleSurrender = () => {
+		modalStore.trigger({
+			type: 'alert',
+			title: `Игра завершилась!`
+		});
+		reloadSocket();
+		goto('/app/profile');
 	};
 
 	socket.on('invite', handleInvite);
 	socket.on('reject', handleReject);
 	socket.on('confirmation', handleConfirm);
+	socket.on('surrender', handleSurrender);
 </script>
 
 <AppShell>
