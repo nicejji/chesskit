@@ -3,6 +3,7 @@
 	import { fade } from 'svelte/transition';
 	import type { Chess, Square } from 'chess.js';
 	import { createEventDispatcher } from 'svelte';
+	import { socket } from '$lib/clientSocket';
 	export let chess: Chess;
 	export let player: 'w' | 'b';
 
@@ -40,6 +41,8 @@
 		n: 'fa-solid:chess-knight',
 		k: 'fa6-solid:chess-king'
 	};
+
+	socket.on('moveReject', () => (promotionPrompt = true));
 </script>
 
 <span class="chip" class:variant-filled-success={myMove} class:variant-filled-warning={!myMove}
@@ -63,20 +66,14 @@
 					on:click={() => {
 						if (movesMap[columnIndex][rowIndex] && selectedFrom) {
 							selectedTo = squares[columnIndex][rowIndex];
-							try {
-								const move = { from: selectedFrom, to: squares[columnIndex][rowIndex] };
-								dispatch('move', move);
-								selectedFrom = undefined;
-							} catch (err) {
-								promotionPrompt = true;
-							}
+							const move = { from: selectedFrom, to: squares[columnIndex][rowIndex] };
+							dispatch('move', move);
 						} else {
 							if (cell?.color === player) {
 								selectedFrom = squares[columnIndex][rowIndex];
 								promotionPrompt = false;
 							}
 						}
-						chess = chess;
 					}}
 				>
 					{#if cell}
@@ -101,10 +98,10 @@
 						class="btn variant-filled-primary"
 						on:click={() => {
 							if (selectedTo && selectedFrom) {
-								chess.move({ from: selectedFrom, to: selectedTo, promotion });
+								const move = { from: selectedFrom, to: selectedTo, promotion };
+								dispatch('move', move);
 								promotionPrompt = false;
 								selectedFrom = undefined;
-								chess = chess;
 							}
 						}}>{promotion}</button
 					>

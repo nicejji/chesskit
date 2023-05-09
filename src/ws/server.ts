@@ -46,8 +46,8 @@ const findClient = (id: number) => {
 const handleInvite = async (from: User, toId: number) => {
 	const to = await prisma.user.findUnique({ where: { id: toId } });
 	if (!to) return;
-  const sentInvites = await prisma.invite.findMany({where: {fromId: from.id, toId}})
-  if (sentInvites.length) return;
+	const sentInvites = await prisma.invite.findMany({ where: { fromId: from.id, toId } });
+	if (sentInvites.length) return;
 	const invite = await prisma.invite.create({ data: { fromId: from.id, toId: to.id } });
 	const recipient = findClient(toId);
 	if (recipient)
@@ -90,8 +90,8 @@ const handleConfirm = async (socket: Socket, from: User, inviteId: number) => {
 const handleSurrender = async (from: User) => {
 	const game = await prisma.game.findUnique({ where: { id: from.gameId || -1 } });
 	if (!game) return;
-  const blackClient = findClient(game.blackPlayerId);
-  const whiteClient = findClient(game.whitePlayerId);
+	const blackClient = findClient(game.blackPlayerId);
+	const whiteClient = findClient(game.whitePlayerId);
 	const winnerId = game.blackPlayerId !== from.id ? game.blackPlayerId : game.whitePlayerId;
 	await prisma.game.update({
 		where: { id: game.id },
@@ -99,8 +99,8 @@ const handleSurrender = async (from: User) => {
 	});
 	await prisma.user.update({ where: { id: game.blackPlayerId }, data: { gameId: null } });
 	await prisma.user.update({ where: { id: game.whitePlayerId }, data: { gameId: null } });
-  blackClient?.socket?.emit('surrender');
-  whiteClient?.socket?.emit('surrender');
+	blackClient?.socket?.emit('surrender');
+	whiteClient?.socket?.emit('surrender');
 };
 
 export const webSocketServer = {
@@ -115,7 +115,7 @@ export const webSocketServer = {
 			socket.on('invite', async (toId) => await handleInvite(user, toId));
 			socket.on('reject', async (inviteId) => await handleReject(user, inviteId));
 			socket.on('confirm', async (inviteId) => await handleConfirm(socket, user, inviteId));
-      socket.on('surrender', async () => await handleSurrender(user));
+			socket.on('surrender', async () => await handleSurrender(user));
 
 			// implementing game itself
 			socket.on('move', async (move) => {
@@ -123,6 +123,7 @@ export const webSocketServer = {
 				if (!game) return;
 				const chess = new Chess(game.FEN);
 				try {
+					console.log(move);
 					chess.move(move);
 					const fen = chess.fen();
 					await prisma.game.update({ where: { id: game.id }, data: { FEN: fen } });
@@ -130,7 +131,9 @@ export const webSocketServer = {
 					const whitePlayer = findClient(game.whitePlayerId);
 					blackPlayer?.socket?.emit('move', fen);
 					whitePlayer?.socket?.emit('move', fen);
-				} catch {}
+				} catch {
+					socket.emit('moveReject');
+				}
 			});
 			// implementing game itself
 		});
