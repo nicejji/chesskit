@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  passwordHash    String
+  winnedGames     Game[]   @relation("winnedGames")
+  losedGames      Game[]   @relation("losedGames")
+  isFindingGame   Boolean  @default(false)
+  currentGame     Game?    @relation(fields: [gameId], references: [id])
+  gameId          Int?
+  sentInvites     Invite[] @relation("sentInvites")
+  recievedInvites Invite[] @relation("recievedInvites")
+  playedAsWhite   Game[]   @relation("playedAsWhite")
+  playedAsBlack   Game[]   @relation("playedAsBlack")
+}
+
+model Invite {
+  id        Int      @id @default(autoincrement())
+  from      User     @relation("sentInvites", fields: [fromId], references: [id])
+  to        User     @relation("recievedInvites", fields: [toId], references: [id])
+  fromId    Int
+  toId      Int
+  createdAt DateTime @default(now())
+}
+
+model Game {
+  id            Int       @id @default(autoincrement())
+  whitePlayerId Int
+  blackPlayerId Int
+  players       User[]
+  whitePlayer   User      @relation("playedAsWhite", fields: [whitePlayerId], references: [id])
+  blackPlayer   User      @relation("playedAsBlack", fields: [blackPlayerId], references: [id])
+  winner        User?     @relation("winnedGames", fields: [winnerId], references: [id])
+  loser         User?     @relation("losedGames", fields: [loserId], references: [id])
+  winnerId      Int?
+  loserId       Int?
+  FEN           String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+}
